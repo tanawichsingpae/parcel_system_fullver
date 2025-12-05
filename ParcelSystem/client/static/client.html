@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Parcel Client — Scan & Preview</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;margin:0;background:#f4f6f9;color:#222}
+    .wrap{max-width:900px;margin:24px auto;padding:16px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .server{font-size:14px;color:#666}
+    .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 8px 20px rgba(12,20,40,0.06);margin-bottom:12px}
+    input.scan{width:100%;padding:14px;border:2px dashed #cfd8e3;border-radius:8px;font-size:18px}
+    .row{display:flex;gap:12px;align-items:center}
+    button.btn{background:#f95e07;color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border-bottom:1px solid #eef2f6;text-align:left}
+    .muted{color:#666;font-size:13px}
+    .small{font-size:13px}
+    .ghost{background:#fff;border:1px solid #e6eef6;color:#345395}
+    .danger{background:#e74c3c}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h2>Parcel Client — Scan & Preview</h2>
+      <div class="server">Server: <span id="serverUrl">http://127.0.0.1:8000</span></div>
+    </header>
+
+    <div class="card">
+      <div class="small muted">Scan or type tracking number and press Enter</div>
+      <input id="scanInput" class="scan" placeholder="Scan tracking here and press Enter" autofocus autocomplete="off" />
+      <div style="margin-top:10px" class="row">
+        <div class="muted">Session preview: <strong id="previewCount">0</strong> items</div>
+        <div style="margin-left:auto">
+          <button class="btn ghost" onclick="clearPreview()">Clear</button>
+          <button class="btn" id="confirmAllBtn" onclick="confirmAll()" disabled>Confirm All</button>
+        </div>
+      </div>
+      <div id="messages" style="margin-top:8px;color:#c0392b"></div>
+    </div>
+
+    <div class="card">
+      <strong>Preview</strong>
+      <div class="muted small">รายการที่สแกนใน session นี้ — ยืนยันเมื่อพร้อม</div>
+      <div id="previewTableWrap" style="margin-top:12px">
+        <table id="previewTable">
+          <thead><tr><th>#</th><th>tracking</th><th>queue</th><th>status</th><th>action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Recent</strong>
+      <div class="muted small">รายการล่าสุดจาก server</div>
+      <div id="recentWrap" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+<script>
+const SERVER = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://127.0.0.1:8000' : (location.origin);
+document.getElementById('serverUrl').innerText = SERVER;
+
+const scanInput = document.getElementById('scanInput');
+const preview = []; // {tracking, queue, status, id}
+const previewTbody = document.querySelector('#previewTable tbody');
+const previewCount = document.getElementById('previewCount');
+const confirmAllBtn = document.getElementById('confirmAllBtn');
+const messages = document.getElementById('messages');
+
+scanInput.addEventListener('keypress', async (e)=>{
+  if(e.key === 'Enter'){
+    const val = scanInput.value.trim();
+    if(!val) return;
+    messages.innerText = '';
+    await handleScan(val);
+    scanInput.value = '';
+    scanInput.focus();
+  }
+});
+
+async function handleScan(tracking){
+  // check if already in preview
+  if(preview.find(p=>p.tracking === tracking)){
+    flashMsg('Already in preview');
+    return;
+  }
+
+  // try to create provisional (provisional=true -> status=PENDING)
+  try{
+    const body = {tracking_number: tracking, provisional: true};
+    const res = await fetch(`${SERVER}/api/parcels`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(res.status === 409){
+      // already exists -> fetch existing and add to preview
+      const j = await res.json();
+      flashMsg('Already exists on server — adding existing item to preview');
+      // get detail
+      const dres = await fetch(`${SERVER}/api/parcels/${encodeURIComponent(tracking)}`);
+      if(dres.ok){
+        const data = await dres.json();
+        addToPreview({tracking: data.tracking_number, queue: data.queue_number, status: data.status, id: data.id});
+      }
+      return;
+    }
+    if(!res.ok){
+      const text = await res.text();
+      flashMsg('Server error: ' + text);
+      return;
+    }
+    const j = await res.json();
+    // j should contain id and queue_number
+    addToPreview({tracking: tracking, queue: j.queue_number ?? j.queue, status: 'PENDING', id: j.id ?? null});
+  }catch(err){
+    flashMsg('Network error: ' + err.message);
+  }
+}
+
+function addToPreview(item){
+  preview.push(item);
+  renderPreview();
+}
+
+function renderPreview(){
+  previewTbody.innerHTML = '';
+  preview.forEach((p, idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${idx+1}</td>
+      <td>${p.tracking}</td>
+      <td>${p.queue || ''}</td>
+      <td>${p.status}</td>
+      <td><button onclick="removeAt(${idx})">Remove</button></td>`;
+    previewTbody.appendChild(tr);
+  });
+  previewCount.innerText = preview.length;
+  confirmAllBtn.disabled = preview.length === 0;
+}
+
+function removeAt(i){
+  preview.splice(i,1);
+  renderPreview();
+}
+
+function clearPreview(){
+  preview.length = 0;
+  renderPreview();
+  messages.innerText = '';
+}
+
+// Confirm all: call confirm_pending for each tracking (or change to desired final action)
+async function confirmAll(){
+  confirmAllBtn.disabled = true;
+  messages.innerText = 'Confirming...';
+  for(const item of [...preview]){
+    try{
+      const res = await fetch(`${SERVER}/api/parcels/${encodeURIComponent(item.tracking)}/confirm_pending`, {method:'POST'});
+      if(res.ok){
+        // mark as RECEIVED
+        item.status = 'RECEIVED';
+      } else {
+        const j = await res.json().catch(()=>null);
+        console.warn('confirm failed', j || await res.text());
+      }
+    } catch(err){
+      console.error('network', err);
+    }
+  }
+  messages.innerText = 'Confirmed all (local preview cleared)';
+  clearPreview();
+  loadRecent();
+}
+
+// quick helper to show recent parcels
+async function loadRecent(){
+  const wrap = document.getElementById('recentWrap');
+  try{
+    const res = await fetch(`${SERVER}/api/parcels?limit=10`);
+    if(!res.ok) { wrap.innerText = 'Failed to load recent'; return; }
+    const arr = await res.json();
+    if(!Array.isArray(arr) || arr.length === 0){ wrap.innerHTML = '<div class="muted">No recent items</div>'; return; }
+    const html = ['<table><thead><tr><th>tracking</th><th>queue</th><th>status</th></tr></thead><tbody>'];
+    for(const r of arr){
+      html.push(`<tr><td>${r.tracking_number}</td><td>${r.queue_number}</td><td>${r.status}</td></tr>`);
+    }
+    html.push('</tbody></table>');
+    wrap.innerHTML = html.join('');
+  }catch(e){
+    wrap.innerText = 'Error: ' + e.message;
+  }
+}
+
+function flashMsg(txt){
+  messages.innerText = txt;
+  setTimeout(()=>{ if(messages.innerText === txt) messages.innerText = ''; }, 4000);
+}
+
+// autoset focus
+window.addEventListener('load', ()=>{ scanInput.focus(); loadRecent(); });
+</script>
+</body>
+</html>
