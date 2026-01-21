@@ -22,6 +22,22 @@ from fastapi.responses import FileResponse
 
 app = FastAPI(title="ParcelServer API")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="ParcelServer API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # --- resolve project and static directories ---
 # file is server/app/api.py -> parents[2] => project root (ParcelSystem)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +85,10 @@ class ParcelIn(BaseModel):
     recipient_name: Optional[str] = None
     recipient_phone: Optional[str] = None
     provisional: bool = False   # if true -> create as PENDING (preview/reservation)
+
+class ConfirmPickupIn(BaseModel):
+    recipient_name: Optional[str] = None
+    scanner_id: Optional[str] = None
 
 # ---------------------------
 # Create parcel (check-in / provisional)
@@ -158,6 +178,68 @@ def confirm_pending(tracking: str):
         db.close()
 
 # ---------------------------
+# parcel search (tracking or queue)
+# ---------------------------
+# --- resilient search endpoints: /api/parcels/search , /api/parcels/search/ , /api/parcels/find
+from typing import Optional
+from fastapi import Query
+from sqlalchemy import or_, func
+
+def _search_parcels_impl(q: str, limit: int = 200):
+    db = SessionLocal()
+    try:
+        pattern = f"%{q}%"
+        try:
+            filt = or_(Parcel.tracking_number.ilike(pattern), Parcel.queue_number.ilike(pattern))
+        except Exception:
+            filt = or_(func.lower(Parcel.tracking_number).like(pattern.lower()),
+                       func.lower(Parcel.queue_number).like(pattern.lower()))
+
+        results = (
+            db.query(Parcel)
+            .filter(filt)
+            .order_by(Parcel.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        items = []
+        for p in results:
+            items.append({
+                "id": p.id,
+                "tracking": p.tracking_number,
+                "queue": p.queue_number,
+                "status": p.status,
+                "recipient": p.recipient_name,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            })
+        return {"count": len(items), "items": items}
+    finally:
+        db.close()
+
+# main route (existing)
+@app.get("/api/parcels/search", summary="Search Parcels")
+def search_parcels(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
+    if not q:
+        return {"count": 0, "items": []}
+    return _search_parcels_impl(q, limit)
+
+# trailing-slash alias
+@app.get("/api/parcels/search/", include_in_schema=False)
+def search_parcels_slash(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
+    if not q:
+        return {"count": 0, "items": []}
+    return _search_parcels_impl(q, limit)
+
+# short alias "find" to be safe if client uses different URL
+@app.get("/api/parcels/find", include_in_schema=False)
+def search_parcels_find(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
+    if not q:
+        return {"count": 0, "items": []}
+    return _search_parcels_impl(q, limit)
+
+
+# ---------------------------
 # Get single parcel
 # ---------------------------
 @app.get("/api/parcels/{tracking}")
@@ -233,29 +315,9 @@ def list_parcels(limit: int = 200):
 # ---------------------------
 # Search parcels (tracking or queue)
 # ---------------------------
-@app.get("/api/parcels/search")
-def search_parcels(q: str = Query(..., min_length=1), limit: int = 200):
-    db = SessionLocal()
-    try:
-        pattern = f"%{q}%"
-        results = (db.query(Parcel)
-                   .filter(or_(Parcel.tracking_number.like(pattern), Parcel.queue_number.like(pattern)))
-                   .order_by(Parcel.created_at.desc())
-                   .limit(limit)
-                   .all())
-        items = []
-        for p in results:
-            items.append({
-                "id": p.id,
-                "tracking": p.tracking_number,
-                "queue": p.queue_number,
-                "recipient": p.recipient_name,
-                "status": p.status,
-                "created_at": p.created_at.isoformat() if p.created_at else None
-            })
-        return {"count": len(items), "items": items}
-    finally:
-        db.close()
+
+
+
 
 # ---------------------------
 # Two-step checkout endpoints for UI double-scan
@@ -276,29 +338,47 @@ def verify_parcel(tracking: str):
     finally:
         db.close()
 
+
 @app.post("/api/parcels/{tracking}/confirm_pickup")
-def confirm_pickup(tracking: str, scanner_id: Optional[str] = None):
+def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
     db = SessionLocal()
     try:
         p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
         if not p:
             raise HTTPException(status_code=404, detail="parcel not found")
+
         if p.status == "PICKED_UP":
+            # already picked — but still allow updating recipient_name if provided?
+            if payload.recipient_name and p.recipient_name != payload.recipient_name:
+                p.recipient_name = payload.recipient_name
+                db.add(p)
+                db.commit()
             return {"ok": False, "message": "already picked"}
+
+        # (optional) Verify that tracking matches the queue or other checks can go here
+
+        # update recipient name if provided
+        if payload.recipient_name:
+            p.recipient_name = payload.recipient_name
+
         p.status = "PICKED_UP"
         db.add(p)
         db.commit()
+
         # audit
         try:
-            al = AuditLog(entity="parcel", entity_id=p.id, action="pickup_confirm", user=scanner_id or "server_ui",
-                          details=f"confirmed by {scanner_id or 'server_ui'}")
+            al = AuditLog(entity="parcel", entity_id=p.id, action="pickup_confirm",
+                          user=payload.scanner_id or "server_ui",
+                          details=f"confirmed by {payload.scanner_id or 'server_ui'}; recipient={p.recipient_name}")
             db.add(al)
             db.commit()
         except Exception:
             db.rollback()
-        return {"ok": True}
+
+        return {"ok": True, "tracking": p.tracking_number, "queue": p.queue_number, "recipient": p.recipient_name}
     finally:
         db.close()
+
 
 # ---------------------------
 # Reports: dates (for dropdown), summary, timeseries, export
@@ -404,12 +484,47 @@ def reports_timeseries(period: str = Query("daily", regex="^(daily|monthly|yearl
 
 @app.get("/api/reports/export")
 def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = "csv"):
+    """
+    Export report filtered by period/date into CSV or XLSX.
+    - period: daily|monthly|yearly
+    - date: for daily -> 'YYYYMMDD', monthly -> 'YYYYMM', yearly -> 'YYYY'
+    - fmt: 'csv' or 'xlsx'
+    The exported file will contain 3 summary rows at the top:
+      Check-in: N
+      Check-out: M
+      Remaining: K
+    then an empty line, then the table with columns:
+      id, tracking_number, queue_number, status, recipient_name, recipient_phone, created_at
+    """
     db = SessionLocal()
     try:
-        q = db.query(Parcel)
-        rows = []
-        for p in q.order_by(Parcel.created_at).all():
-            rows.append({
+        # load and filter same as report_summary logic
+        rows = db.query(Parcel).order_by(Parcel.created_at.desc()).all()
+
+        items = []
+        checkin = 0
+        checkout = 0
+
+        for p in rows:
+            dt = p.created_at
+            # if date filter provided, compute key and compare
+            if date:
+                if not dt:
+                    continue
+                if period == "daily":
+                    key = dt.strftime("%Y%m%d")
+                elif period == "monthly":
+                    key = dt.strftime("%Y%m")
+                else:
+                    key = dt.strftime("%Y")
+                if key != date:
+                    continue
+
+            checkin += 1
+            if p.status == "PICKED_UP":
+                checkout += 1
+
+            items.append({
                 "id": p.id,
                 "tracking_number": p.tracking_number,
                 "queue_number": p.queue_number,
@@ -418,8 +533,74 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
                 "recipient_phone": p.recipient_phone,
                 "created_at": p.created_at.isoformat() if p.created_at else None
             })
+
+        remaining = checkin - checkout
+
     finally:
         db.close()
+
+    # Prepare filename
+    safe_date = date or "all"
+    fname_base = f"parcel_report_{period}_{safe_date}"
+    # CSV branch (or fallback if pandas not available)
+    if fmt == "csv" or not PANDAS_AVAILABLE:
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+
+        # write summary rows first
+        writer.writerow(["Check-in", str(checkin)])
+        writer.writerow(["Check-out", str(checkout)])
+        writer.writerow(["Remaining", str(remaining)])
+        writer.writerow([])  # blank line
+
+        # write header + rows
+        fieldnames = ["id", "tracking_number", "queue_number", "status", "recipient_name", "recipient_phone", "created_at"]
+        writer.writerow(fieldnames)
+        for r in items:
+            writer.writerow([r.get(f) for f in fieldnames])
+
+        content = buffer.getvalue()
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{fname_base}.csv"'}
+        )
+
+    # XLSX branch using pandas -> openpyxl engine
+    # We'll write the summary in the top rows and the dataframe starting at row 5 (index 4)
+    df = pd.DataFrame(items)
+    # Ensure all columns exist in DataFrame (in correct order)
+    cols = ["id", "tracking_number", "queue_number", "status", "recipient_name",  "created_at"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = None
+    df = df[cols]
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        # write dataframe starting at row index 4 (Excel row 5) so we have room for 3 summary rows + blank line
+        df.to_excel(writer, index=False, sheet_name="parcels", startrow=4)
+
+        # write summary on top-left of the same sheet
+        ws = writer.sheets["parcels"]
+        # Excel rows are 1-indexed
+        ws.cell(row=1, column=1, value="Check-in")
+        ws.cell(row=1, column=2, value=checkin)
+        ws.cell(row=2, column=1, value="Check-out")
+        ws.cell(row=2, column=2, value=checkout)
+        ws.cell(row=3, column=1, value="Remaining")
+        ws.cell(row=3, column=2, value=remaining)
+
+        # optionally freeze panes so header is visible
+        ws.freeze_panes = "A6"
+
+    buffer.seek(0)
+    return Response(
+        content=buffer.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname_base}.xlsx"'}
+    )
+
 
     if fmt == "csv" or not PANDAS_AVAILABLE:
         buffer = io.StringIO()

@@ -1,301 +1,629 @@
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8" />
   <title>ParcelServer — Admin</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body{font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;margin:0;background:#f3f6f9;color:#222}
-    header{background:#345395;color:#fff;padding:18px 24px}
-    .container{max-width:1100px;margin:22px auto;padding:12px}
-    .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 8px 22px rgba(20,30,60,0.06)}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    .btn{background:#f95e07;color:#fff;padding:10px 14px;border-radius:8px;border:none;cursor:pointer}
-    input,select{padding:8px;border-radius:8px;border:1px solid #ddd}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
-    .muted{color:#666;font-size:13px}
-    nav.tabs{display:flex;gap:8px;margin-bottom:12px}
-    nav.tabs button{background:#fff;padding:10px 14px;border-radius:10px;border:1px solid #e6e6e6;cursor:pointer}
-    nav.tabs button.active{background:#345395;color:#fff;border-color:#345395}
-    .flex{display:flex;gap:12px;align-items:center}
-    .scan-input{font-size:18px;padding:10px;border-radius:8px;border:2px dashed #ccc;min-width:320px}
-    .small{font-size:13px;color:#444}
-    .pill{display:inline-block;background:#fff;padding:10px;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,0.06);margin-right:8px}
+    body {
+      font-family: Inter, system-ui, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      background: #f3f6f9;
+      color: #222
+    }
+
+    header {
+      background: #345395;
+      color: #fff;
+      padding: 18px 24px
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 22px auto;
+      padding: 12px
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 22px rgba(20, 30, 60, 0.06)
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center
+    }
+
+    .btn {
+      background: #f95e07;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer
+    }
+
+    .btn-plain {
+      background: #eee;
+      color: #222;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      margin-left: 8px
+    }
+
+    input,
+    select,
+    textarea {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ddd
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse
+    }
+
+    th,
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      text-align: left
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px
+    }
+
+    nav.tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px
+    }
+
+    nav.tabs button {
+      background: #fff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #e6e6e6;
+      cursor: pointer
+    }
+
+    nav.tabs button.active {
+      background: #345395;
+      color: #fff;
+      border-color: #345395
+    }
+
+    .flex {
+      display: flex;
+      gap: 12px;
+      align-items: center
+    }
+
+    .scan-input {
+      font-size: 18px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 2px dashed #ccc;
+      min-width: 320px
+    }
+
+    .small {
+      font-size: 13px;
+      color: #444
+    }
+
+    .pill {
+      display: inline-block;
+      background: #fff;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+      margin-right: 8px
+    }
+
+    /* responsive */
+    @media (max-width:700px) {
+      .scan-input {
+        min-width: 100%
+      }
+
+      .container {
+        padding: 10px
+      }
+    }
   </style>
   <!-- Chart.js CDN -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
-<header><h1>ParcelServer — Admin</h1></header>
-<div class="container">
-  <nav class="tabs" id="mainTabs">
-    <button class="tabBtn active" data-tab="checkout">Checkout</button>
-    <button class="tabBtn" data-tab="reports">Reports</button>
-  </nav>
+  <header>
+    <h1>ParcelServer — Admin</h1>
+  </header>
+  <div class="container">
+    <nav class="tabs" id="mainTabs">
+      <button class="tabBtn active" data-tab="checkout">Checkout</button>
+      <button class="tabBtn" data-tab="reports">Reports</button>
+    </nav>
 
-  <!-- CHECKOUT TAB -->
-  <div id="checkout" class="tabContent">
-    <div class="card">
-      <strong>Checkout (Double-scan)</strong>
-      <div class="muted">Scan to verify, then scan again to confirm pickup. หรือค้นหาก่อนยืนยัน</div>
+    <!-- CHECKOUT TAB -->
+    <div id="checkout" class="tabContent">
+      <div class="card">
+        <strong>Checkout (Double-scan)</strong>
+        <div class="muted">Scan to verify, then scan again to confirm pickup. หรือค้นหาก่อนยืนยัน</div>
 
-      <div style="margin-top:10px">
-        <div class="small">Scanner input (keyboard-wedge):</div>
-        <input id="scanInput" class="scan-input" placeholder="Scan tracking here and press Enter" />
-        <div style="margin-top:8px" class="small">Status: <span id="scanStatus">waiting</span></div>
-        <div style="margin-top:12px"><button class="btn" onclick="forceClearPending()">Clear</button></div>
+        <div style="margin-top:10px">
+          <div class="small">Scanner input (keyboard-wedge):</div>
+          <input id="scanInput" class="scan-input" placeholder="Scan tracking here and press Enter" />
+          <div style="margin-top:8px" class="small">Status: <span id="scanStatus">waiting</span></div>
+          <div style="margin-top:12px"><button class="btn" onclick="forceClearPending()">Clear</button></div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <button class="btn" onclick="startCamera()">📷 Scan (Camera)</button>
+          <button class="btn-plain" onclick="stopCamera()">Stop</button>
+        </div>
+
+        <div id="reader" style="margin-top:12px;max-width:320px"></div>
+
+
+        <div id="pendingBox" style="margin-top:12px"></div>
       </div>
 
-      <div id="pendingBox" style="margin-top:12px"></div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <strong>Search / Quick Lookup</strong>
-          <div class="muted">ค้นหาโดย tracking หรือ queue</div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Search / Quick Lookup</strong>
+            <div class="muted">ค้นหาโดย tracking หรือ queue</div>
+          </div>
+          <div class="flex">
+            <input id="searchInput" placeholder="tracking or queue" />
+            <button class="btn" onclick="doSearch()">Search</button>
+          </div>
         </div>
-        <div class="flex">
-          <input id="searchInput" placeholder="tracking or queue" />
-          <button class="btn" onclick="doSearch()">Search</button>
-        </div>
+        <div id="searchResults" style="margin-top:12px"></div>
       </div>
-      <div id="searchResults" style="margin-top:12px"></div>
+
+      <div class="card">
+        <strong>Detailed view / History</strong>
+        <div id="detailView" class="muted">เลือกพัสดุแล้วจะขึ้นรายละเอียดที่นี่</div>
+      </div>
     </div>
 
-    <div class="card">
-      <strong>Detailed view / History</strong>
-      <div id="detailView" class="muted">เลือกพัสดุแล้วจะขึ้นรายละเอียดที่นี่</div>
+    <!-- REPORTS TAB -->
+    <div id="reports" class="tabContent" style="display:none">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Reports</strong>
+            <div class="muted">ดูสรุปยอด และส่งออกไฟล์ CSV / XLSX</div>
+          </div>
+
+          <div class="row">
+            <select id="r_period">
+              <option value="daily">Daily</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+            <select id="r_periodValues"></select>
+            <button class="btn" onclick="loadReport()">Open</button>
+            <button class="btn" onclick="exportReport('csv')">Export CSV</button>
+            <button class="btn" onclick="exportReport('xlsx')">Export XLSX</button>
+          </div>
+        </div>
+
+        <div id="summary" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <strong>Summary chart</strong>
+        <canvas id="summaryChart" height="120"></canvas>
+      </div>
+
+      <div class="card">
+        <strong>Report data (preview)</strong>
+        <div id="reportTable"></div>
+      </div>
     </div>
+
   </div>
 
-  <!-- REPORTS TAB -->
-  <div id="reports" class="tabContent" style="display:none">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <strong>Reports</strong>
-          <div class="muted">ดูสรุปยอด และส่งออกไฟล์ CSV / XLSX</div>
-        </div>
+  <script>
+    /* ---------------- Tabs ---------------- */
+    document.querySelectorAll('.tabBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabBtn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tabContent').forEach(tc => tc.style.display = tc.id === tab ? 'block' : 'none');
+        if (tab === 'reports') initReports();
+      });
+    });
 
-        <div class="row">
-          <select id="r_period">
-            <option value="daily">Daily</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-          <select id="r_periodValues"></select>
-          <button class="btn" onclick="loadReport()">Open</button>
-          <button class="btn" onclick="exportReport('csv')">Export CSV</button>
-          <button class="btn" onclick="exportReport('xlsx')">Export XLSX</button>
-        </div>
+    /* ---------- Globals ---------- */
+    let pendingVerification = null;
+
+    /* ---------- Scan input handling ---------- */
+    const scanInputEl = document.getElementById('scanInput');
+    scanInputEl.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleScan(scanInputEl.value.trim());
+    });
+
+    async function handleScan(value) {
+      if (!value) return;
+      // first scan -> verify
+      if (!pendingVerification) {
+        setStatus('verifying...');
+        try {
+          const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, { method: 'POST' });
+          if (!res.ok) {
+            const err = await safeJson(res).catch(() => ({ detail: res.statusText }));
+            setStatus('Verify failed: ' + (err.detail || res.statusText));
+            scanInputEl.value = '';
+            return;
+          }
+          const info = await res.json();
+          const recipientName = info.recipient_name ?? info.recipient ?? '';
+          pendingVerification = {
+            tracking: info.tracking,
+            queue: info.queue_number || info.queue || '',
+            recipient: recipientName,
+            ts: Date.now()
+          };
+          renderPendingBox();
+          showDetail(info);
+          setStatus('Verified — please fill recipient and re-enter tracking to confirm (or scan same tracking again).');
+        } catch (err) {
+          setStatus('Network error: ' + err);
+        } finally {
+          scanInputEl.value = '';
+        }
+        return;
+      }
+
+      // second scan -> if matches, perform confirm using recipient in pending box
+      if (value === pendingVerification.tracking) {
+        const recipientInput = document.getElementById('pendingRecipientInput');
+        const recipientToSend = recipientInput ? recipientInput.value.trim() : (pendingVerification.recipient || '');
+        await doConfirmPickup(pendingVerification.tracking, recipientToSend);
+        return;
+      } else {
+        setStatus(`Mismatch: scanned ${value} (expected ${pendingVerification.tracking})`);
+        scanInputEl.value = '';
+        return;
+      }
+    }
+
+    /* ---------- Render pending verification box ---------- */
+    function renderPendingBox() {
+      if (!pendingVerification) {
+        document.getElementById('pendingBox').innerHTML = '';
+        return;
+      }
+      const rec = pendingVerification.recipient || '';
+      document.getElementById('pendingBox').innerHTML = `
+    <div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
+      <div><strong>Pending:</strong> ${escapeHtml(pendingVerification.tracking)} <small>[${escapeHtml(pendingVerification.queue)}]</small></div>
+      <div class="small" style="margin-top:6px">Recipient (editable): <br>
+        <input id="pendingRecipientInput" style="width:60%;padding:8px;border-radius:6px;border:1px solid #ddd" value="${escapeAttr(rec)}" placeholder="ชื่อผู้รับตามบัตร/นิสิต" />
       </div>
 
-      <div id="summary" style="margin-top:12px"></div>
-    </div>
+      <div class="small" style="margin-top:8px">Re-enter tracking to confirm (exact match): <br>
+        <input id="pendingConfirmTracking" style="width:40%;padding:8px;border-radius:6px;border:1px solid #ddd" placeholder="Type tracking again to confirm" />
+      </div>
 
-    <div class="card">
-      <strong>Summary chart</strong>
-      <canvas id="summaryChart" height="120"></canvas>
-    </div>
+      <div class="small" style="margin-top:8px">You can either:
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>Scan the same tracking again (scan input) — or</li>
+          <li>Type same tracking into the "Re-enter tracking" field and press Confirm</li>
+        </ul>
+      </div>
 
-    <div class="card">
-      <strong>Report data (preview)</strong>
-      <div id="reportTable"></div>
-    </div>
-  </div>
-
-</div>
-
-<script>
-/* Tabs */
-document.querySelectorAll('.tabBtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tabBtn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.querySelectorAll('.tabContent').forEach(tc=>tc.style.display = tc.id===tab ? 'block' : 'none');
-    if(tab === 'reports') initReports();
-  });
-});
-
-/* ---------- Checkout logic (double-scan) ---------- */
-let pendingVerification = null;
-document.getElementById('scanInput').addEventListener('keypress', (e)=>{
-  if(e.key === 'Enter') handleScan(document.getElementById('scanInput').value.trim());
-});
-
-async function handleScan(value){
-  if(!value) return;
-  if(!pendingVerification){
-    // first scan -> verify
-    const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {method:'POST'});
-    if(!res.ok){ document.getElementById('scanStatus').innerText = 'Verify failed'; document.getElementById('scanInput').value=''; return; }
-    const info = await res.json();
-    pendingVerification = {tracking: info.tracking, queue: info.queue_number, recipient: info.recipient_name, ts: Date.now()};
-    document.getElementById('pendingBox').innerHTML = `<div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
-      <div><strong>Pending:</strong> ${info.tracking} <small>[${info.queue_number}]</small></div>
-      <div class="small">Recipient: ${info.recipient_name || '---'}</div>
-      <div class="small">Scan again the same tracking to confirm pickup</div>
+      <div style="margin-top:8px">
+        <button id="pendingConfirmBtn" class="btn" disabled>Confirm pickup</button>
+        <button class="btn-plain" onclick="startCameraConfirm()">📷 Scan to confirm</button>
+        <button class="btn-plain" onclick="forceClearPending()">Cancel</button>
+      </div>
     </div>`;
-    document.getElementById('scanStatus').innerText = 'Verified — waiting for second scan';
-    document.getElementById('scanInput').value = '';
-    // also show details
-    showDetail(info);
-    return;
-  }
 
-  // second scan -> confirm only if match
-  if(value === pendingVerification.tracking){
-    const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/confirm_pickup`, {method:'POST'});
-    const j = await res.json();
-    if(j.ok){ document.getElementById('scanStatus').innerText = `Confirmed pickup ${value}`; pendingVerification = null; document.getElementById('pendingBox').innerHTML = `<div class="small">Confirmed ${value}</div>`; document.getElementById('scanInput').value=''; }
-    else { document.getElementById('scanStatus').innerText = j.message || 'Confirm failed'; }
-    return;
-  } else {
-    document.getElementById('scanStatus').innerText = `Mismatch: scanned ${value} (expected ${pendingVerification.tracking})`;
-    document.getElementById('scanInput').value = '';
-    // do not clear pending automatically
-    return;
-  }
-}
+      const confirmField = document.getElementById('pendingConfirmTracking');
+      const recipientField = document.getElementById('pendingRecipientInput');
+      const confirmBtn = document.getElementById('pendingConfirmBtn');
 
-function forceClearPending(){ pendingVerification = null; document.getElementById('pendingBox').innerHTML = ''; document.getElementById('scanStatus').innerText = 'cleared'; }
+      function updatePendingControls() {
+        const a = (recipientField.value || '').trim().length > 0;
+        const b = (confirmField.value || '').trim().length > 0 && (confirmField.value.trim() === pendingVerification.tracking);
+        confirmBtn.disabled = !(a && b);
+      }
 
-/* Search */
-document.getElementById('searchInput').addEventListener('keypress', (e)=>{ if(e.key==='Enter') doSearch(); });
-async function doSearch(){
-  const q = document.getElementById('searchInput').value.trim();
-  if(!q) return alert('Please input tracking or queue');
-  const res = await fetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
-  if(!res.ok) return alert('Search failed');
-  const data = await res.json();
-  if(data.count === 0) { document.getElementById('searchResults').innerHTML = '<div class="muted">No results</div>'; return; }
-  // render table
-  const rows = data.items.map(i=>`<tr><td>${i.tracking}</td><td>${i.queue}</td><td>${i.status}</td><td>${i.recipient||''}</td>
-    <td><button onclick="verify('${i.tracking}')">Verify</button> <button onclick="confirmPickup('${i.tracking}')">Confirm</button></td></tr>`).join('');
-  document.getElementById('searchResults').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th><th>action</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
+      confirmField.addEventListener('input', updatePendingControls);
+      recipientField.addEventListener('input', updatePendingControls);
 
-/* manual verify/confirm from search results */
-async function verify(tracking){
-  const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, {method:'POST'});
-  if(!res.ok) return alert('verify failed');
-  const info = await res.json();
-  pendingVerification = {tracking: info.tracking, queue: info.queue_number, recipient: info.recipient_name, ts: Date.now()};
-  document.getElementById('pendingBox').innerHTML = `<div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
-    <div><strong>Pending:</strong> ${info.tracking} <small>[${info.queue_number}]</small></div>
-    <div class="small">Recipient: ${info.recipient_name || '---'}</div>
-    <div class="small">Scan again the same tracking to confirm pickup</div>
-  </div>`;
-  document.getElementById('scanStatus').innerText = 'Verified — waiting for second scan';
-  showDetail(info);
-}
+      confirmBtn.addEventListener('click', async () => {
+        const recipientToSend = (document.getElementById('pendingRecipientInput').value || '').trim();
+        await doConfirmPickup(pendingVerification.tracking, recipientToSend);
+      });
 
-async function confirmPickup(tracking){
-  if(!confirm('Confirm pickup?')) return;
-  const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {method:'POST'});
-  const j = await res.json();
-  alert(JSON.stringify(j));
-  // optionally refresh UI
-}
+      if (recipientField) recipientField.focus();
+    }
 
-/* show detailed info */
-function showDetail(info){
-  document.getElementById('detailView').innerHTML = `<div><strong>Tracking:</strong> ${info.tracking}</div>
-    <div><strong>Queue:</strong> ${info.queue}</div>
-    <div><strong>Recipient:</strong> ${info.recipient || '---'}</div>
+    /* ---------- Confirm pickup (send recipient_name with request) ---------- */
+    async function doConfirmPickup(tracking, recipientToSend) {
+      setStatus('confirming pickup...');
+      try {
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient_name: recipientToSend, scanner_id: 'admin_ui' })
+        });
+        const j = await safeJson(res);
+        if (res.ok && (j.ok === true || j.ok === undefined)) {
+          setStatus(`Confirmed pickup ${tracking}`);
+          showDetail({ tracking: tracking, queue: pendingVerification ? pendingVerification.queue : '', recipient: recipientToSend, status: 'PICKED_UP' });
+          pendingVerification = null;
+          document.getElementById('pendingBox').innerHTML = `<div class="small">Confirmed ${escapeHtml(tracking)}</div>`;
+          // optionally refresh recent list
+          refreshRecentIfExists();
+        } else {
+          setStatus('Confirm failed: ' + (j.message || j.detail || JSON.stringify(j)));
+        }
+      } catch (err) {
+        setStatus('Network error: ' + err);
+      } finally {
+        try { document.getElementById('scanInput').value = ''; } catch (e) { }
+      }
+    }
+
+    /* Force clear pending */
+    function forceClearPending() { pendingVerification = null; document.getElementById('pendingBox').innerHTML = ''; setStatus('waiting'); }
+
+    /* ---------- Search ---------- */
+    document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
+    async function doSearch() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) return alert('Please input tracking or queue');
+      const res = await fetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) return alert('Search failed');
+      const data = await res.json();
+      if (data.count === 0) { document.getElementById('searchResults').innerHTML = '<div class="muted">No results</div>'; return; }
+      const rows = data.items.map(i => `<tr>
+    <td>${escapeHtml(i.tracking)}</td>
+    <td>${escapeHtml(i.queue)}</td>
+    <td>${escapeHtml(i.status)}</td>
+    <td>${escapeHtml(i.recipient || '')}</td>
+    <td>
+      <button class="btn" onclick="verifyFromSearch('${escapeJs(i.tracking)}')">Verify</button>
+      <button class="btn-plain" onclick="confirmFromSearch('${escapeJs(i.tracking)}','${escapeJs(i.recipient || '')}')">Confirm</button>
+    </td>
+  </tr>`).join('');
+      document.getElementById('searchResults').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th><th>action</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    /* When user clicks Verify in search result -> load into pending via verify endpoint */
+    async function verifyFromSearch(tracking) {
+      setStatus('verifying...');
+      try {
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { method: 'POST' });
+        if (!res.ok) { setStatus('verify failed'); return; }
+        const info = await res.json();
+        pendingVerification = {
+          tracking: info.tracking,
+          queue: info.queue_number || info.queue || '',
+          recipient: info.recipient_name ?? info.recipient ?? '',
+          ts: Date.now()
+        };
+        renderPendingBox();
+        showDetail(info);
+        setStatus('Verified — fill recipient and re-enter tracking to confirm.');
+      } catch (err) {
+        setStatus('error: ' + err);
+      }
+    }
+
+    /* When user clicks Confirm in search result -> move into pending so staff can fill recipient and re-enter tracking */
+    function confirmFromSearch(tracking, recipFromSearch) {
+      pendingVerification = { tracking: tracking, queue: '', recipient: recipFromSearch || '', ts: Date.now() };
+      renderPendingBox();
+      setStatus('Loaded into pending — edit recipient or re-enter tracking to confirm.');
+    }
+
+    /* ---------- Detailed view ---------- */
+    function showDetail(info) {
+      if (!info) { document.getElementById('detailView').innerHTML = '<div class="muted">No detail</div>'; return; }
+      const t = info.tracking || info.tracking_number || '';
+      const q = info.queue || info.queue_number || '';
+      const r = info.recipient_name || info.recipient || info.recipient;
+      const s = info.status || info.state || '';
+      document.getElementById('detailView').innerHTML = `<div><strong>Tracking:</strong> ${escapeHtml(t)}</div>
+    <div><strong>Queue:</strong> ${escapeHtml(q)}</div>
+    <div><strong>Recipient:</strong> ${escapeHtml(r || '---')}</div>
+    <div><strong>Status:</strong> ${escapeHtml(s)}</div>
     <div class="small">(You can verify name vs student card before confirming)</div>`;
-}
+    }
 
-/* ---------- Reports logic (chart + export) ---------- */
-let chartInst = null;
-let currentReportData = null;
+    /* ---------- Reports (same as before) ---------- */
+    let chartInst = null;
+    let currentReportData = null;
+    async function initReports() { await loadReportValues(); }
+    async function loadReportValues() {
+      const p = document.getElementById('r_period').value;
+      const res = await fetch(`/api/reports/dates?period=${p}`);
+      if (!res.ok) return;
+      const arr = await res.json();
+      const sel = document.getElementById('r_periodValues');
+      sel.innerHTML = '';
+      if (arr.length === 0) { sel.add(new Option('No data', '')); return; }
+      arr.forEach(r => {
+        let label = r.period;
+        if (p === 'daily' && label.length === 8) label = `${label.slice(0, 4)}-${label.slice(4, 6)}-${label.slice(6)}`;
+        if (p === 'monthly' && label.length === 6) label = `${label.slice(0, 4)}-${label.slice(4, 6)}`;
+        sel.add(new Option(`${label} (${r.count})`, r.period));
+      });
+    }
+    document.getElementById('r_period').addEventListener('change', loadReportValues);
 
-async function initReports(){
-  // load period values if not loaded
-  await loadReportValues();
-  // optionally auto open today
-  // loadReport();
-}
-
-async function loadReportValues(){
-  const p = document.getElementById('r_period').value;
-  const res = await fetch(`/api/reports/dates?period=${p}`);
-  if(!res.ok) return;
-  const arr = await res.json();
-  const sel = document.getElementById('r_periodValues');
-  sel.innerHTML = '';
-  if(arr.length === 0){ sel.add(new Option('No data','')); return; }
-  arr.forEach(r=>{
-    let label = r.period;
-    if(p === 'daily' && label.length===8) label = `${label.slice(0,4)}-${label.slice(4,6)}-${label.slice(6)}`;
-    if(p === 'monthly' && label.length===6) label = `${label.slice(0,4)}-${label.slice(4,6)}`;
-    sel.add(new Option(`${label} (${r.count})`, r.period));
-  });
-}
-
-document.getElementById('r_period').addEventListener('change', loadReportValues);
-
-async function loadReport(){
-  const p = document.getElementById('r_period').value;
-  const val = document.getElementById('r_periodValues').value || '';
-  // fetch summary
-  const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
-  const sdata = await sres.json();
-  document.getElementById('summary').innerHTML = `<div style="display:flex;gap:12px">
+    async function loadReport() {
+      const p = document.getElementById('r_period').value;
+      const val = document.getElementById('r_periodValues').value || '';
+      const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
+      const sdata = await sres.json();
+      document.getElementById('summary').innerHTML = `<div style="display:flex;gap:12px">
     <div class="pill">Check-in: <strong>${sdata.checkin}</strong></div>
     <div class="pill">Check-out: <strong>${sdata.checkout}</strong></div>
     <div class="pill">Remaining: <strong>${sdata.remaining}</strong></div>
   </div>`;
-  renderReportTable(sdata.items);
-
-  // fetch timeseries for chart (we can request last N points; server returns labels & arrays)
-  const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
-  const tdata = await tres.json();
-  currentReportData = tdata;
-  renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
-}
-
-function renderReportTable(items){
-  if(!items || items.length===0){ document.getElementById('reportTable').innerHTML = '<div class="muted">No items</div>'; return; }
-  const rows = items.map(i=>`<tr><td>${i.tracking}</td><td>${i.queue}</td><td>${i.status}</td><td>${i.recipient||''}</td></tr>`).join('');
-  document.getElementById('reportTable').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-function renderChart(labels, checkin, checkout, period){
-  // convert labels to readable format
-  const formattedLabels = labels.map(l=>{
-    if(period==='daily' && l.length===8) return `${l.slice(0,4)}-${l.slice(4,6)}-${l.slice(6)}`;
-    if(period==='monthly' && l.length===6) return `${l.slice(0,4)}-${l.slice(4,6)}`;
-    return l;
-  });
-
-  const ctx = document.getElementById('summaryChart').getContext('2d');
-  if(chartInst) chartInst.destroy();
-  chartInst = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: formattedLabels,
-      datasets: [
-        { label: 'Check-in', data: checkin, fill: false, tension: 0.2 },
-        { label: 'Check-out', data: checkout, fill: false, tension: 0.2 }
-      ]
-    },
-    options: {
-      responsive: true,
-      scales: { y: { beginAtZero: true } }
+      renderReportTable(sdata.items);
+      const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
+      const tdata = await tres.json();
+      currentReportData = tdata;
+      renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
     }
-  });
-}
+    function renderReportTable(items) {
+      if (!items || items.length === 0) { document.getElementById('reportTable').innerHTML = '<div class="muted">No items</div>'; return; }
+      const rows = items.map(i => `<tr><td>${escapeHtml(i.tracking)}</td><td>${escapeHtml(i.queue)}</td><td>${escapeHtml(i.status)}</td><td>${escapeHtml(i.recipient || '')}</td></tr>`).join('');
+      document.getElementById('reportTable').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    function renderChart(labels, checkin, checkout, period) {
+      const formattedLabels = labels.map(l => {
+        if (period === 'daily' && l.length === 8) return `${l.slice(0, 4)}-${l.slice(4, 6)}-${l.slice(6)}`;
+        if (period === 'monthly' && l.length === 6) return `${l.slice(0, 4)}-${l.slice(4, 6)}`;
+        return l;
+      });
+      const ctx = document.getElementById('summaryChart').getContext('2d');
+      if (chartInst) chartInst.destroy();
+      chartInst = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: formattedLabels,
+          datasets: [
+            { label: 'Check-in', data: checkin, fill: false, tension: 0.2 },
+            { label: 'Check-out', data: checkout, fill: false, tension: 0.2 }
+          ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+    function exportReport(fmt) {
+      const p = document.getElementById('r_period').value;
+      const val = document.getElementById('r_periodValues').value || '';
+      window.open(`/api/reports/export?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}&fmt=${fmt}`, '_blank');
+    }
 
-/* Export */
-function exportReport(fmt){
-  const p = document.getElementById('r_period').value;
-  const val = document.getElementById('r_periodValues').value || '';
-  window.open(`/api/reports/export?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}&fmt=${fmt}`, '_blank');
-}
-</script>
+    /* ---------- Utilities ---------- */
+    function setStatus(s) { try { document.getElementById('scanStatus').innerText = s; } catch (e) { } }
+    function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function escapeAttr(s) { return (String(s || '').replace(/"/g, '&quot;')); }
+    function escapeJs(s) { return String(s || '').replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    async function safeJson(res) { try { return await res.json(); } catch (e) { return {}; } }
+
+    /* optional: refresh recent list if you have an element (not implemented here) */
+    function refreshRecentIfExists() {
+      // if you maintain a "recent" list, call /api/parcels and re-render it.
+    }
+
+    /* initialize report values on load */
+    window.addEventListener('load', () => { if (document.querySelector('.tabBtn.active').dataset.tab === 'reports') initReports(); });
+
+    /* ---------- Camera Scan (ADD-ON) ---------- */
+    let qrScanner = null;
+    let cameraLocked = false;
+
+    function startCamera() {
+      if (qrScanner) return;
+
+      cameraLocked = false;
+      qrScanner = new Html5Qrcode("reader");
+
+      Html5Qrcode.getCameras().then(cams => {
+        if (!cams.length) {
+          setStatus('No camera found');
+          return;
+        }
+
+        const camId = cams[cams.length - 1].id; // back camera
+
+        qrScanner.start(
+          camId,
+          { fps: 10, qrbox: 250 },
+          text => {
+            if (cameraLocked) return;
+            cameraLocked = true;
+
+            stopCamera();
+
+            // ⭐ จุดสำคัญ: ใช้ logic เดิมทั้งหมด
+            handleScan(text.trim());
+          }
+        );
+      }).catch(err => {
+        setStatus('Camera error');
+        console.error(err);
+      });
+    }
+
+    function stopCamera() {
+      if (!qrScanner) return;
+      qrScanner.stop().then(() => {
+        qrScanner.clear();
+        qrScanner = null;
+        cameraLocked = false;
+      });
+    }
+
+    function startCameraConfirm() {
+      if (qrScanner) return;
+
+      cameraLocked = false;
+      setStatus('Scanning for confirm...');
+
+      qrScanner = new Html5Qrcode("reader");
+
+      Html5Qrcode.getCameras().then(cams => {
+        if (!cams.length) {
+          setStatus('No camera found');
+          return;
+        }
+
+        const camId = cams[cams.length - 1].id;
+
+        qrScanner.start(
+          camId,
+          { fps: 10, qrbox: 250 },
+          text => {
+            if (cameraLocked) return;
+            cameraLocked = true;
+
+            stopCamera();
+
+            const scanned = text.trim();
+
+            // ⭐ สำคัญ: ใช้ logic confirm เดิม
+            if (pendingVerification && scanned === pendingVerification.tracking) {
+              const recipientInput = document.getElementById('pendingRecipientInput');
+              const recipientToSend = recipientInput ? recipientInput.value.trim() : '';
+              doConfirmPickup(scanned, recipientToSend);
+            } else {
+              setStatus(`Mismatch: scanned ${scanned}`);
+            }
+          }
+        );
+      });
+    }
+
+
+  </script>
 </body>
+
 </html>

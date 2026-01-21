@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./ParcelSystem/client/client_",
+        "./ParcelSystem/client/client_"
+    ]
+}
