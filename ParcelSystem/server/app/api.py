@@ -24,8 +24,6 @@ app = FastAPI(title="ParcelServer API")
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="ParcelServer API")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -89,6 +87,11 @@ class ParcelIn(BaseModel):
 class ConfirmPickupIn(BaseModel):
     recipient_name: Optional[str] = None
     scanner_id: Optional[str] = None
+
+class BulkDeleteIn(BaseModel):
+    ids: Optional[list[int]] = None
+    trackings: Optional[list[str]] = None
+
 
 # ---------------------------
 # Create parcel (check-in / provisional)
@@ -619,4 +622,50 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
         return Response(content=buffer.read(),
                         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         headers={"Content-Disposition": f'attachment; filename="parcel_report_{period}_{date or "all"}.xlsx"'})
+    
+# ---------------------------
+# Admin: Bulk delete parcels
+# ---------------------------
+@app.post("/api/parcels/bulk_delete")
+def bulk_delete_parcels(payload: BulkDeleteIn):
+    if not payload.ids and not payload.trackings:
+        raise HTTPException(status_code=400, detail="ids or trackings required")
+
+    db = SessionLocal()
+    try:
+        q = db.query(Parcel)
+
+        if payload.ids:
+            q = q.filter(Parcel.id.in_(payload.ids))
+        if payload.trackings:
+            q = q.filter(Parcel.tracking_number.in_(payload.trackings))
+
+        to_delete = q.all()
+        if not to_delete:
+            return {"ok": True, "deleted": 0}
+
+        count = len(to_delete)
+
+        for p in to_delete:
+            db.delete(p)
+
+            # audit log
+            try:
+                al = AuditLog(
+                    entity="parcel",
+                    entity_id=p.id,
+                    action="delete",
+                    user="admin_ui",
+                    details=f"tracking={p.tracking_number}"
+                )
+                db.add(al)
+            except Exception:
+                pass
+
+        db.commit()
+        return {"ok": True, "deleted": count}
+
+    finally:
+        db.close()
+
 # EOF

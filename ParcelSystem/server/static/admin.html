@@ -221,6 +221,10 @@
             <button class="btn" onclick="loadReport()">Open</button>
             <button class="btn" onclick="exportReport('csv')">Export CSV</button>
             <button class="btn" onclick="exportReport('xlsx')">Export XLSX</button>
+            <button class="btn-plain" onclick="toggleReportEdit()">Edit</button>
+<button class="btn danger" id="removeBtn"
+        onclick="removeSelected()" disabled>
+  Remove selected
           </div>
         </div>
 
@@ -317,7 +321,7 @@
     <div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
       <div><strong>Pending:</strong> ${escapeHtml(pendingVerification.tracking)} <small>[${escapeHtml(pendingVerification.queue)}]</small></div>
       <div class="small" style="margin-top:6px">Recipient (editable): <br>
-        <input id="pendingRecipientInput" style="width:60%;padding:8px;border-radius:6px;border:1px solid #ddd" value="${escapeAttr(rec)}" placeholder="ชื่อผู้รับตามบัตร/นิสิต" />
+        <input id="pendingRecipientInput" style="width:60%;padding:8px;border-radius:6px;border:1px solid #ddd" value="${escapeAttr(rec)}" placeholder="ชื่อผู้รับตามบัตรนิสิต" />
       </div>
 
       <div class="small" style="margin-top:8px">Re-enter tracking to confirm (exact match): <br>
@@ -403,10 +407,6 @@
     <td>${escapeHtml(i.queue)}</td>
     <td>${escapeHtml(i.status)}</td>
     <td>${escapeHtml(i.recipient || '')}</td>
-    <td>
-      <button class="btn" onclick="verifyFromSearch('${escapeJs(i.tracking)}')">Verify</button>
-      <button class="btn-plain" onclick="confirmFromSearch('${escapeJs(i.tracking)}','${escapeJs(i.recipient || '')}')">Confirm</button>
-    </td>
   </tr>`).join('');
       document.getElementById('searchResults').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th><th>action</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
@@ -453,73 +453,176 @@
     <div class="small">(You can verify name vs student card before confirming)</div>`;
     }
 
-    /* ---------- Reports (same as before) ---------- */
-    let chartInst = null;
-    let currentReportData = null;
-    async function initReports() { await loadReportValues(); }
-    async function loadReportValues() {
-      const p = document.getElementById('r_period').value;
-      const res = await fetch(`/api/reports/dates?period=${p}`);
-      if (!res.ok) return;
-      const arr = await res.json();
-      const sel = document.getElementById('r_periodValues');
-      sel.innerHTML = '';
-      if (arr.length === 0) { sel.add(new Option('No data', '')); return; }
-      arr.forEach(r => {
-        let label = r.period;
-        if (p === 'daily' && label.length === 8) label = `${label.slice(0, 4)}-${label.slice(4, 6)}-${label.slice(6)}`;
-        if (p === 'monthly' && label.length === 6) label = `${label.slice(0, 4)}-${label.slice(4, 6)}`;
-        sel.add(new Option(`${label} (${r.count})`, r.period));
-      });
-    }
-    document.getElementById('r_period').addEventListener('change', loadReportValues);
+    /* ---------- Reports ---------- */
 
-    async function loadReport() {
-      const p = document.getElementById('r_period').value;
-      const val = document.getElementById('r_periodValues').value || '';
-      const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
-      const sdata = await sres.json();
-      document.getElementById('summary').innerHTML = `<div style="display:flex;gap:12px">
-    <div class="pill">Check-in: <strong>${sdata.checkin}</strong></div>
-    <div class="pill">Check-out: <strong>${sdata.checkout}</strong></div>
-    <div class="pill">Remaining: <strong>${sdata.remaining}</strong></div>
-  </div>`;
-      renderReportTable(sdata.items);
-      const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
-      const tdata = await tres.json();
-      currentReportData = tdata;
-      renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
-    }
-    function renderReportTable(items) {
-      if (!items || items.length === 0) { document.getElementById('reportTable').innerHTML = '<div class="muted">No items</div>'; return; }
-      const rows = items.map(i => `<tr><td>${escapeHtml(i.tracking)}</td><td>${escapeHtml(i.queue)}</td><td>${escapeHtml(i.status)}</td><td>${escapeHtml(i.recipient || '')}</td></tr>`).join('');
-      document.getElementById('reportTable').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-    function renderChart(labels, checkin, checkout, period) {
-      const formattedLabels = labels.map(l => {
-        if (period === 'daily' && l.length === 8) return `${l.slice(0, 4)}-${l.slice(4, 6)}-${l.slice(6)}`;
-        if (period === 'monthly' && l.length === 6) return `${l.slice(0, 4)}-${l.slice(4, 6)}`;
-        return l;
-      });
-      const ctx = document.getElementById('summaryChart').getContext('2d');
-      if (chartInst) chartInst.destroy();
-      chartInst = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: formattedLabels,
-          datasets: [
-            { label: 'Check-in', data: checkin, fill: false, tension: 0.2 },
-            { label: 'Check-out', data: checkout, fill: false, tension: 0.2 }
-          ]
-        },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
-      });
-    }
-    function exportReport(fmt) {
-      const p = document.getElementById('r_period').value;
-      const val = document.getElementById('r_periodValues').value || '';
-      window.open(`/api/reports/export?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}&fmt=${fmt}`, '_blank');
-    }
+let chartInst = null;
+let currentReportData = null;
+
+/* === NEW STATE === */
+let reportEditMode = false;
+let selectedToDelete = new Set();
+
+/* ---------- init ---------- */
+async function initReports(){
+  await loadReportValues();
+}
+
+/* ---------- period values ---------- */
+async function loadReportValues(){
+  const p = document.getElementById('r_period').value;
+  const res = await fetch(`/api/reports/dates?period=${p}`);
+  if(!res.ok) return;
+
+  const arr = await res.json();
+  const sel = document.getElementById('r_periodValues');
+  sel.innerHTML = '';
+
+  if(arr.length === 0){
+    sel.add(new Option('No data',''));
+    return;
+  }
+
+  arr.forEach(r=>{
+    let label = r.period;
+    if(p==='daily' && label.length===8) label = `${label.slice(0,4)}-${label.slice(4,6)}-${label.slice(6)}`;
+    if(p==='monthly' && label.length===6) label = `${label.slice(0,4)}-${label.slice(4,6)}`;
+    sel.add(new Option(`${label} (${r.count})`, r.period));
+  });
+}
+
+document.getElementById('r_period')
+  .addEventListener('change', loadReportValues);
+
+/* ---------- load report ---------- */
+async function loadReport(){
+  const p = document.getElementById('r_period').value;
+  const val = document.getElementById('r_periodValues').value || '';
+
+  const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
+  const sdata = await sres.json();
+
+  document.getElementById('summary').innerHTML = `
+    <div style="display:flex;gap:12px">
+      <div class="pill">Check-in: <strong>${sdata.checkin}</strong></div>
+      <div class="pill">Check-out: <strong>${sdata.checkout}</strong></div>
+      <div class="pill">Remaining: <strong>${sdata.remaining}</strong></div>
+    </div>
+  `;
+
+  currentReportData = sdata.items || [];
+  renderReportTable(currentReportData);
+
+  const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
+  const tdata = await tres.json();
+  renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
+}
+
+/* ---------- table ---------- */
+function renderReportTable(items){
+  if(!items || items.length===0){
+    document.getElementById('reportTable').innerHTML = '<div class="muted">No items</div>';
+    return;
+  }
+
+  const rows = items.map(i=>`
+    <tr>
+      ${reportEditMode ? `
+        <td>
+          <input type="checkbox"
+            onchange="toggleSelect('${escapeJs(i.tracking)}', this.checked)">
+        </td>` : ''
+      }
+      <td>${escapeHtml(i.tracking)}</td>
+      <td>${escapeHtml(i.queue)}</td>
+      <td>${escapeHtml(i.status)}</td>
+      <td>${escapeHtml(i.recipient||'')}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('reportTable').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          ${reportEditMode ? '<th></th>' : ''}
+          <th>tracking</th>
+          <th>queue</th>
+          <th>status</th>
+          <th>recipient</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+/* ---------- edit mode ---------- */
+function toggleReportEdit(){
+  reportEditMode = !reportEditMode;
+  selectedToDelete.clear();
+  document.getElementById('removeBtn').disabled = true;
+  renderReportTable(currentReportData);
+}
+
+function toggleSelect(tracking, checked){
+  if(checked) selectedToDelete.add(tracking);
+  else selectedToDelete.delete(tracking);
+
+  document.getElementById('removeBtn').disabled =
+    selectedToDelete.size === 0;
+}
+
+/* ---------- delete ---------- */
+async function removeSelected(){
+  if(selectedToDelete.size === 0) return;
+
+  if(!confirm(`Delete ${selectedToDelete.size} parcel(s)?`)) return;
+
+  const res = await fetch('/api/parcels/bulk_delete', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ trackings: Array.from(selectedToDelete) })
+  });
+
+  if(!res.ok){
+    alert('Delete failed');
+    return;
+  }
+
+  reportEditMode = false;
+  selectedToDelete.clear();
+  await loadReport();
+}
+
+/* ---------- chart ---------- */
+function renderChart(labels, checkin, checkout, period){
+  const formattedLabels = labels.map(l=>{
+    if(period==='daily' && l.length===8) return `${l.slice(0,4)}-${l.slice(4,6)}-${l.slice(6)}`;
+    if(period==='monthly' && l.length===6) return `${l.slice(0,4)}-${l.slice(4,6)}`;
+    return l;
+  });
+
+  const ctx = document.getElementById('summaryChart').getContext('2d');
+  if(chartInst) chartInst.destroy();
+
+  chartInst = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:formattedLabels,
+      datasets:[
+        {label:'Check-in', data:checkin, tension:.2},
+        {label:'Check-out', data:checkout, tension:.2}
+      ]
+    },
+    options:{responsive:true, scales:{y:{beginAtZero:true}}}
+  });
+}
+
+/* ---------- export ---------- */
+function exportReport(fmt){
+  const p = document.getElementById('r_period').value;
+  const val = document.getElementById('r_periodValues').value || '';
+  window.open(`/api/reports/export?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}&fmt=${fmt}`);
+}
 
     /* ---------- Utilities ---------- */
     function setStatus(s) { try { document.getElementById('scanStatus').innerText = s; } catch (e) { } }
