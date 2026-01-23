@@ -33,3 +33,14 @@ class AuditLog(Base):
     user = Column(String)
     details = Column(Text)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+# models.py
+class RecycledQueue(Base):
+    __tablename__ = "recycled_queues"
+
+    id = Column(Integer, primary_key=True)
+    carrier = Column(String, index=True, nullable=False)
+    date = Column(String, index=True, nullable=False)  # YYYYMMDD
+    queue_number = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

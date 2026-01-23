@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel
 from .db import SessionLocal, init_db
-from .models import Parcel, DailyCounter, AuditLog
+from .models import Parcel, DailyCounter, AuditLog, RecycledQueue
 from .utils import next_queue_number_atomic, format_queue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_
@@ -667,5 +667,39 @@ def bulk_delete_parcels(payload: BulkDeleteIn):
 
     finally:
         db.close()
+
+# ---------------------------
+# Delete provisional parcel (from client preview)
+# ---------------------------
+@app.delete("/api/parcels/{tracking}")
+def delete_parcel(tracking: str):
+    db = SessionLocal()
+    try:
+        p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="parcel not found")
+
+        if p.status != "PENDING":
+            raise HTTPException(
+                status_code=400,
+                detail="cannot delete parcel that is not PENDING"
+            )
+
+        # ✅ คืนคิว
+        rq = RecycledQueue(
+            carrier=p.carrier,
+            date=p.created_at.strftime("%Y%m%d"),
+            queue_number=p.queue_number
+        )
+        db.add(rq)
+
+        db.delete(p)
+        db.commit()
+
+        return {"ok": True, "tracking": tracking}
+
+    finally:
+        db.close()
+
 
 # EOF

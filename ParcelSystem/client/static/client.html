@@ -183,7 +183,34 @@ function renderPreview(){
   confirmAllBtn.disabled=!preview.length;
 }
 
-function removeAt(i){preview.splice(i,1);savePreview();renderPreview();}
+/* ---------------- REMOVE ---------------- */
+async function removeAt(i){
+  const item = preview[i];
+  if (!item) return;
+
+  if (!confirm(`Remove ${item.tracking}?`)) return;
+
+  try {
+    const res = await fetch(
+      `${SERVER}/api/parcels/${encodeURIComponent(item.tracking)}`,
+      { method: 'DELETE' }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      flashMsg(err.detail || 'Delete failed', false);
+      return;
+    }
+
+    // ลบออกจาก preview หลัง backend ลบสำเร็จ
+    preview.splice(i, 1);
+    renderPreview();
+    flashMsg('Removed', true);
+
+  } catch (e) {
+    flashMsg(e.message, false);
+  }
+}
 
 /* ---------------- CONFIRM ---------------- */
 async function confirmAll(){
