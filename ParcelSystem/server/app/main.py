@@ -1,7 +1,6 @@
 # server/app/main.py
 import uvicorn
 from .api import app
-from .broadcaster import start_broadcast
 import socket
 
 def get_local_ip():

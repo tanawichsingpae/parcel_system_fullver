@@ -156,6 +156,9 @@
     <nav class="tabs" id="mainTabs">
       <button class="tabBtn active" data-tab="checkout">Checkout</button>
       <button class="tabBtn" data-tab="reports">Reports</button>
+      <button class="tabBtn" data-tab="audit">Audit Logs</button>
+      <!-- ปุ่ม Logout -->
+  <button class="btn-plain" onclick="logout()">Logout</button>
     </nav>
 
     <!-- CHECKOUT TAB -->
@@ -244,6 +247,21 @@
 
   </div>
 
+  <!-- AUDIT LOG TAB -->
+<div id="audit" class="tabContent" style="display:none">
+  <div class="card">
+    <strong>Audit Logs</strong>
+    <div class="muted">ประวัติการใช้งานระบบ (create / delete / pickup)</div>
+
+    <div style="margin-top:12px">
+      <button class="btn" onclick="loadAuditLogs()">Reload</button>
+    </div>
+
+    <div id="auditTable" style="margin-top:12px"></div>
+  </div>
+</div>
+
+
   <script>
     /* ---------------- Tabs ---------------- */
     document.querySelectorAll('.tabBtn').forEach(btn => {
@@ -253,6 +271,7 @@
         const tab = btn.dataset.tab;
         document.querySelectorAll('.tabContent').forEach(tc => tc.style.display = tc.id === tab ? 'block' : 'none');
         if (tab === 'reports') initReports();
+        if (tab === 'audit') loadAuditLogs();
       });
     });
 
@@ -517,6 +536,49 @@ async function loadReport(){
   renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
 }
 
+/* ---------- Audit Logs ---------- */
+async function loadAuditLogs() {
+  const res = await fetch("/api/audit_logs");
+  if (!res.ok) {
+    document.getElementById("auditTable").innerHTML =
+      '<div class="muted">Failed to load audit logs</div>';
+    return;
+  }
+
+  const rows = await res.json();
+  if (!rows.length) {
+    document.getElementById("auditTable").innerHTML =
+      '<div class="muted">No audit logs</div>';
+    return;
+  }
+
+  const html = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.timestamp)}</td>
+      <td>${escapeHtml(r.entity)}</td>
+      <td>${escapeHtml(r.action)}</td>
+      <td>${escapeHtml(r.user)}</td>
+      <td>${escapeHtml(r.details || '')}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById("auditTable").innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Entity</th>
+          <th>Action</th>
+          <th>User</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>${html}</tbody>
+    </table>
+  `;
+}
+
+
 /* ---------- table ---------- */
 function renderReportTable(items){
   if(!items || items.length===0){
@@ -725,6 +787,12 @@ function exportReport(fmt){
       });
     }
 
+  /* ---------- Logout ---------- */
+  function logout(){
+    if(confirm("ต้องการออกจากระบบหรือไม่?")){
+      window.location.href = "/admin/logout";
+    }
+  }
 
   </script>
 </body>

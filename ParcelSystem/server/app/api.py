@@ -9,6 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_
 import io, csv
 from datetime import datetime, date
+from fastapi import Depends, Request
+
 try:
     import pandas as pd
     PANDAS_AVAILABLE = True
@@ -19,8 +21,22 @@ import os
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import Request, Form
+from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
+
 
 app = FastAPI(title="ParcelServer API")
+
+from .admin_auth import SESSION_SECRET_KEY
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    same_site="lax",
+    https_only=False
+)
+
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -58,17 +74,72 @@ def client_ui():
         return FileResponse(str(client_file))
     raise HTTPException(status_code=404, detail=f"client.html not found at {client_file}")
 
+def require_admin(request: Request):
+    admin = request.session.get("admin")
+    if not admin:
+        raise HTTPException(status_code=401, detail="Please login")
+    return admin
+
+@app.get("/admin/login")
+def admin_login_page():
+    return FileResponse("server/static/admin_login.html")
+
+from .admin_auth import SYSTEM_ADMIN_PASSWORD
+
+@app.get("/admin/logout")
+def admin_logout(request: Request):
+    admin_name = request.session.get("admin_name", "unknown")
+
+    db = SessionLocal()
+    try:
+        al = AuditLog(
+            entity="admin",
+            entity_id=None,
+            action="logout",
+            user=admin_name,
+            details="admin logout"
+        )
+        db.add(al)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+    request.session.clear()
+    return RedirectResponse(url="/admin/login", status_code=302)
+
+@app.post("/admin/login")
+def admin_login(
+    request: Request,
+    name: str = Form(...),
+    password: str = Form(...)
+):
+    if password != SYSTEM_ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Wrong password")
+
+    request.session["admin"] = {
+        "name": name
+    }
+
+    return RedirectResponse("/admin", status_code=303)
+
 
 @app.get("/admin")
-def admin_ui():
-    # Prefer server/static/admin.html, fallback to client/static/admin.html
+def admin_ui(
+    request: Request,
+    admin=Depends(require_admin)
+):
     server_admin = SERVER_STATIC / "admin.html"
     if server_admin.exists():
         return FileResponse(str(server_admin))
+
     client_admin = CLIENT_STATIC / "admin.html"
     if client_admin.exists():
         return FileResponse(str(client_admin))
-    raise HTTPException(status_code=404, detail=f"admin.html not found (checked {server_admin} and {client_admin})")
+
+    raise HTTPException(status_code=404, detail="admin.html not found")
+
 
 
 # Startup: init DB
@@ -626,10 +697,18 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
 # ---------------------------
 # Admin: Bulk delete parcels
 # ---------------------------
+
+
 @app.post("/api/parcels/bulk_delete")
-def bulk_delete_parcels(payload: BulkDeleteIn):
+def bulk_delete_parcels(
+    payload: BulkDeleteIn,
+    request: Request,
+    admin = Depends(require_admin)
+):
     if not payload.ids and not payload.trackings:
         raise HTTPException(status_code=400, detail="ids or trackings required")
+
+    admin_name = admin["name"] 
 
     db = SessionLocal()
     try:
@@ -649,13 +728,13 @@ def bulk_delete_parcels(payload: BulkDeleteIn):
         for p in to_delete:
             db.delete(p)
 
-            # audit log
+        
             try:
                 al = AuditLog(
                     entity="parcel",
                     entity_id=p.id,
                     action="delete",
-                    user="admin_ui",
+                    user=admin_name,
                     details=f"tracking={p.tracking_number}"
                 )
                 db.add(al)
@@ -667,6 +746,7 @@ def bulk_delete_parcels(payload: BulkDeleteIn):
 
     finally:
         db.close()
+
 
 # ---------------------------
 # Delete provisional parcel (from client preview)
@@ -685,7 +765,6 @@ def delete_parcel(tracking: str):
                 detail="cannot delete parcel that is not PENDING"
             )
 
-        # ✅ คืนคิว
         rq = RecycledQueue(
             carrier=p.carrier,
             date=p.created_at.strftime("%Y%m%d"),
@@ -698,6 +777,34 @@ def delete_parcel(tracking: str):
 
         return {"ok": True, "tracking": tracking}
 
+    finally:
+        db.close()
+
+# ---------------------------
+# Audit Logs
+# ---------------------------
+@app.get("/api/audit_logs")
+def list_audit_logs(limit: int = 100):
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AuditLog)
+            .order_by(AuditLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "entity": r.entity,
+                "entity_id": r.entity_id,
+                "action": r.action,
+                "user": r.user,
+                "details": r.details,
+                "timestamp": r.timestamp.isoformat()
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 

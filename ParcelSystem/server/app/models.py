@@ -3,7 +3,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.sql import func
 from .db import Base
 
-# พาร्सเซลหลัก
+# ข้อมูลพัสดุ (Parcel)
 class Parcel(Base):
     __tablename__ = "parcels"
     id = Column(Integer, primary_key=True)
